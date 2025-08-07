@@ -1,0 +1,58 @@
+HowTo How do I USBBOOT Pi Zero/Pi Zero 2 without SD cards (Cluster HAT/Cluster CTRL)?
+
+With the Cluster CTRL images (linked from the ClusterHAT website) it's now possible to mix/match booting nodes (Pi Zeros/Compute Modules/A+) with or without SD cards.
+
+Preparation
+This guide assumes you're running a Raspberry Pi with our modified Raspbian Bookworm/Bullseye/Buster/Stretch ClusterCTRL images (see the Cluster HAT site for details).
+
+For the ClusterHAT v1.x edit /etc/default/clusterctrl on the controller and uncomment the appropriate CLUSTERHATV1 line based on the USB port you have the Cluster HAT plugged into, then run "sudo clusterctrl init". 
+
+The Cluster HAT v2.x/ClusterCTRL devices don't need this step as the USB port is detected as the controller boots.
+
+If the port is changed after boot (for v1.x you'll need to set the correct port again first) run "sudo clusterctrl init" to setup the boot directory links in /var/lib/clusterctrl/boot/ .
+
+Setup Pi Zero file systems
+Differing from the old test images the filesystems for the Pi Zeros are no longer pre-installed. This allows you to mix/match different versions and releases (Bookworm/Bullseye/Buster/Stretch) on the same controller. The hardware you're running it on must be supported by the release.
+
+Official ClusterCTRL usbboot archives can be found at https://dist.8086.net/clusterctrl/usbboot/
+
+I would advise using the latest dated Bookworm release and then choose if you want Lite, Full or Standard image. There are also Bullseye/Buster/Stretch usbboot root filesystems available if you need to use an older release.
+
+Once you've selected the image(s) you want to use copy the URL and download them to the controller using wget (replacing "pi" with your username).
+
+wget -P ~pi/ URL_OF_USBBOOT_ARCHIVE
+For example to download the 2024-07-04 Lite Bookworm image you would run (replacing "pi" with your username).
+
+wget -P ~pi/ https://dist1.8086.net/clusterctrl/usbboot/bookworm/2024-07-04/2024-07-04-3-bookworm-ClusterCTRL-armhf-lite-usbboot.tar.xz
+For each Pi Zero (in position pX) extract the filesystem (you can mix/match different versions) and then configure it.
+
+If you have files in the nodes root filesystem these must be removed first (replacing X with the pX number). Ensure you have a backup of any required files first!
+
+sudo rm -rf /var/lib/clusterctrl/nfs/pX/{*,.*}
+The error "unable to remove  directories . and .." error is expected and can be ignored.
+
+For example for P1 you would extract and configure it using (again replace "pi" with your username).
+
+sudo tar -axf ~pi/2024-07-04-3-bookworm-ClusterCTRL-armhf-lite-usbboot.tar.xz -C /var/lib/clusterctrl/nfs/p1/
+sudo usbboot-init 1
+Repeat the above two commands for any other Pi Zeros 2/3/4/etc. where you want to use USBBOOT. The archives aren't specific to P1/P2/etc. (unlike the SD images) but they need to be converted by running "usbboot-init X" replacing X with the Px number. You can mix booting with SD/USBBOOT with Bullseye/Buster/Stretch releases and 32/64-bit where they support running on the Pi Zero/2 hardware.
+
+Whilst older stretch/buster archives have default login details (user: pi pass: clusterctrl) newer images do not have a default username pr passwords. For newer bullseye usbboot archies please use the following steps (replacing pX with p1/p2/etc. and myusername/mypassword with your desired username/password) to setup a username and password before the first boot.
+
+set +o history # Turn off bash history temporarily
+# Replace myusername and mypassword with your details and pX with the node (p1/p2/etc.).
+echo "myusername:"$(echo 'mypassword' | openssl passwd -6 -stdin) | sudo tee /var/lib/clusterctrl/nfs/pX/boot/firmware/userconf.txt # For Bookworm
+#echo "myusername:"$(echo 'mypassword' | openssl passwd -6 -stdin) | sudo tee /var/lib/clusterctrl/nfs/pX/boot/userconf.txt # For Bullseye and earlier
+set -o history # Turn history back on again
+Before powering on the Pi Zero you can enable SSH by creating the "ssh" file in the "/boot/firmware" directory when using bookworm or "/boot" for bullseye and earlier.
+
+sudo touch /var/lib/clusterctrl/nfs/p1/boot/firmware/ssh
+Power the Pi Zero on as normal.
+
+clusterctrl on p1
+You can watch the boot process via the journal (shows rpiboot process) when using Bookworm on the controller.
+
+journalctl -f -n10
+Or you can watch the boot process by tailing /var/log/daemon.log (shows rpiboot process) /var/log/kern.log (shows USB devices etc) is using Bullseye on the controller.
+
+tail -f /var/log/daemon.log /var/log/kern.log
